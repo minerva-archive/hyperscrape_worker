@@ -50,28 +50,31 @@ if (config["general"]["max_chunk_count"] != 0):
 os.makedirs("./chunks", exist_ok=True)
 
 CHUNK_THREADS: dict[str, Thread] = {}
-for MAIN_RETRIES in range(3):
-    print("\nConnecting to coordinator")
+while True:
+    print("\nTrying to connect to coordinator")
     worker_id = None
     for CONNECT_RETRIES in range(3):
-            try:
-                response = requests.post(f"{COORDINATOR_ROOT}/workers", json={
-                    "version": VERSION,
-                    "max_upload": 100, # HARDCODED FOR NOW!
-                    "max_download": params["download_speed"],
-                    "max_per_file_speed": params["myrient_download_speed"],
-                    "threads": os.cpu_count()
-                })
-                if (response.status_code != 200):
-                    print(f"Error: Unable to connect to coordinator ({response.status_code}), retrying in {RETRY_TIME}s...")
-                    print(f"{response.text}")
-                    time.sleep(RETRY_TIME)
-                    continue
-                worker_id = response.json()["worker_id"]
-                auth_token = response.json()["auth_token"]
-            except Exception as e:
-                print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
+        try:
+            response = requests.post(f"{COORDINATOR_ROOT}/workers", json={
+                "version": VERSION,
+                "max_upload": 100, # HARDCODED FOR NOW!
+                "max_download": params["download_speed"],
+                "max_per_file_speed": params["myrient_download_speed"],
+                "threads": os.cpu_count()
+            })
+            if (response.status_code != 200):
+                print(f"Error: Unable to connect to coordinator ({response.status_code}), retrying in {RETRY_TIME}s...")
+                print(f"{response.text}")
                 time.sleep(RETRY_TIME)
+                continue
+            worker_id = response.json()["worker_id"]
+            auth_token = response.json()["auth_token"]
+        except Exception as e:
+            print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
+            time.sleep(RETRY_TIME)
+    if (worker_id == None):
+        print("COULD NOT CONNECT TO COORDINATOR!")
+        exit(1)
 
     print(f"Connected to coordinator with ID: {worker_id}")
     print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
@@ -110,6 +113,8 @@ for MAIN_RETRIES in range(3):
             break
 
         for chunk_id in chunks:
+            if (chunk_id in CHUNK_THREADS):
+                continue
             chunk = chunks[chunk_id]
             file_location = f"./chunks/{chunk_id}.bin"
             context = WorkerContext(chunk_id,
@@ -117,7 +122,7 @@ for MAIN_RETRIES in range(3):
                                     file_location,
                                     chunk["range"][0],
                                     chunk["range"][1],
-                                    chunk["destination"],
+                                    COORDINATOR_ROOT + "/upload",
                                     COORDINATOR_ROOT + "/status",
                                     auth_token,
                                     USER_AGENT,

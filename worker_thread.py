@@ -3,13 +3,13 @@ from tqdm import tqdm
 import os
 
 class WorkerContext():
-    def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, destination: str, status_endpoint: str, auth_token: str, user_agent: str, pbar: tqdm):
+    def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, pbar: tqdm):
         self.chunk_id = chunk_id
         self.url = url
         self.file_location = file_location
         self.range_start = range_start
         self.range_end = range_end
-        self.destination = destination
+        self.upload_endpoint = upload_endpoint
         self.status_endpoint = status_endpoint
         self.auth_token = auth_token
         self.user_agent = user_agent
@@ -68,10 +68,10 @@ def worker_thread(context: WorkerContext):
     with open(context.file_location, "rb") as file:
         context.pbar.reset()
         context.pbar.desc = "Uploading"
-        requests.put(context.destination, headers={
+        requests.put(context.upload_endpoint, headers={
             "authorization": f"Bearer {context.auth_token}"
         }, params={
-            "chunk": context.chunk_id
+            "chunk_id": context.chunk_id
         }, data=context.read_file_with_progress())
     context.pbar.close()
     # Delete the file
