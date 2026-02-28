@@ -1,0 +1,72 @@
+import requests
+from tqdm import tqdm
+
+class WorkerContext():
+    def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, destination: str, status_endpoint: str, auth_token: str, user_agent: str, pbar: tqdm):
+        self.chunk_id = chunk_id
+        self.url = url
+        self.file_location = file_location
+        self.range_start = range_start
+        self.range_end = range_end
+        self.destination = destination
+        self.status_endpoint = status_endpoint
+        self.auth_token = auth_token
+        self.user_agent = user_agent
+        self.pbar = pbar
+
+    def read_file_with_progress(self):
+        downloaded = self.range_end - self.range_start
+        uploaded = 0
+        with open(self.file_location, 'rb') as file:
+            data = file.read(1024**2) # Upload in 1MiB chunks
+            while (len(data) > 0):
+                uploaded += len(data)
+                yield data
+
+                # Update status to reflect update amount
+                try:
+                    requests.get(self.status_endpoint, headers={
+                        "authorization": f"Bearer {self.auth_token}"
+                    }, data = {
+                        self.chunk_id: {
+                            "downloaded": downloaded,
+                            "uploaded": uploaded
+                        }
+                    })
+                except Exception as e:
+                    print(f"[WARN]: Could not update status: {e}")
+
+def download_file(context: WorkerContext):
+    context.pbar.clear()
+    context.pbar.total = context.range_end - context.range_start
+    response = requests.get(context.url, headers={
+        "User-Agent": context.user_agent,
+        "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
+    }, stream=True)
+
+    with open(context.file_location, 'wb') as file:
+        downloaded = 0
+        for chunk in response.iter_content(8192): # 8192KB size seems good
+            file.write(chunk)
+            context.pbar.update(len(chunk))
+            downloaded += len(chunk)
+            try:
+                requests.get(context.status_endpoint, headers={
+                    "authorization": f"Bearer {context.auth_token}"
+                }, data = {
+                    context.chunk_id: {
+                        "downloaded": downloaded,
+                        "uploaded": 0
+                    }
+                })
+            except Exception as e:
+                print(f"[WARN]: Could not update status: {e}")
+    
+    # It's done, upload it now
+    with open(context.file_location, "rb") as file:
+        context.pbar.reset()
+        requests.put(context.destination, headers={
+            "authorization": f"Bearer {context.auth_token}"
+        }, params={
+            "chunk": context.chunk_id
+        }, data=context.read_file_with_progress())

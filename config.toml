@@ -1,0 +1,10 @@
+[general]
+coordinator_url = "http://127.0.0.1:8081"
+retry_time = 3 # Seconds to wait between retries
+
+# URLs for speed testing
+myrient_speed_test_url = "https://myrient.erista.me/files/No-Intro/VM%20Labs%20-%20NUON%20%28Digital%29/Atari%202600%20Pac-Man%20%28Unknown%29%20%28Unl%29.zip"
+speed_test_url = "http://ipv4.download.thinkbroadband.com/5MB.zip"
+
+# Limit the number of chunks (0 means unlimited)
+max_chunk_count = 0
