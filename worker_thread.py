@@ -36,9 +36,10 @@ class WorkerContext():
                 except Exception as e:
                     print(f"[WARN]: Could not update status: {e}")
 
-def download_file(context: WorkerContext):
+def worker_thread(context: WorkerContext):
     context.pbar.clear()
     context.pbar.total = context.range_end - context.range_start
+    context.pbar.desc = "Downloading"
     response = requests.get(context.url, headers={
         "User-Agent": context.user_agent,
         "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
@@ -65,8 +66,10 @@ def download_file(context: WorkerContext):
     # It's done, upload it now
     with open(context.file_location, "rb") as file:
         context.pbar.reset()
+        context.pbar.desc = "Uploading"
         requests.put(context.destination, headers={
             "authorization": f"Bearer {context.auth_token}"
         }, params={
             "chunk": context.chunk_id
         }, data=context.read_file_with_progress())
+    context.pbar.close()
