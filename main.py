@@ -67,7 +67,8 @@ for MAIN_RETRIES in range(3):
                     print(f"{response.text}")
                     time.sleep(RETRY_TIME)
                     continue
-                worker_id = response.json()["token"]
+                worker_id = response.json()["worker_id"]
+                auth_token = response.json()["auth_token"]
             except Exception as e:
                 print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
                 time.sleep(RETRY_TIME)
@@ -91,7 +92,7 @@ for MAIN_RETRIES in range(3):
             response = requests.get(f"{COORDINATOR_ROOT}/chunks", params={
                 "n": chunks_to_requeset
             }, headers={
-                "authorization": f"Bearer {worker_id}"
+                "authorization": f"Bearer {auth_token}"
             })
             if (response.status_code != 200):
                 print(f"Error retrieving chunks ({response.status_code}):")
@@ -118,7 +119,7 @@ for MAIN_RETRIES in range(3):
                                     chunk["range"][1],
                                     chunk["destination"],
                                     COORDINATOR_ROOT + "/status",
-                                    worker_id,
+                                    auth_token,
                                     USER_AGENT,
                                     tqdm()
                                 )

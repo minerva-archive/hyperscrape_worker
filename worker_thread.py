@@ -1,5 +1,6 @@
 import requests
 from tqdm import tqdm
+import os
 
 class WorkerContext():
     def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, destination: str, status_endpoint: str, auth_token: str, user_agent: str, pbar: tqdm):
@@ -73,3 +74,5 @@ def worker_thread(context: WorkerContext):
             "chunk": context.chunk_id
         }, data=context.read_file_with_progress())
     context.pbar.close()
+    # Delete the file
+    os.remove(context.file_location)
