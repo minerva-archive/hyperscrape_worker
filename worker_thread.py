@@ -19,10 +19,12 @@ class WorkerContext():
         downloaded = self.range_end - self.range_start
         uploaded = 0
         with open(self.file_location, 'rb') as file:
-            data = file.read(1024**2) # Upload in 1MiB chunks
+            read_size = 1023**2 # upload in 1MiB chunks
+            data = file.read(read_size)
             while (len(data) > 0):
                 uploaded += len(data)
                 yield data
+                data = file.read(read_size)
 
                 # Update status to reflect update amount
                 try:

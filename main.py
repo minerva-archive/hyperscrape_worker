@@ -74,12 +74,12 @@ while True:
             time.sleep(RETRY_TIME)
     if (worker_id == None):
         print("COULD NOT CONNECT TO COORDINATOR!")
-        exit(1)
+        os._exit(1)
 
     print(f"Connected to coordinator with ID: {worker_id}")
     print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
     while True:
-        for chunk_id in CHUNK_THREADS:
+        for chunk_id in list(CHUNK_THREADS.keys()):
             chunk_thread = CHUNK_THREADS[chunk_id]
             if (not chunk_thread.is_alive()):
                 del CHUNK_THREADS[chunk_id]
