@@ -90,7 +90,6 @@ while True:
 
         # We have space to get more chunk threads
         chunks_to_requeset = CHUNK_COUNT - len(CHUNK_THREADS)
-        print(f"Requesting {chunks_to_requeset} new chunks to download")
         try:
             response = requests.get(f"{COORDINATOR_ROOT}/chunks", params={
                 "n": chunks_to_requeset
@@ -104,7 +103,8 @@ while True:
                 break
             chunks = response.json()
             if (len(chunks) == 0):
-                print("No new chunks from the server.")
+                if (len(CHUNK_THREADS) == 0):
+                    print("Waiting for new chunks to download...")
                 time.sleep(RETRY_TIME)
                 continue
         except Exception as e:
@@ -112,6 +112,8 @@ while True:
             time.sleep(RETRY_TIME)
             break
 
+        if (len(chunks) > 0):
+            print(f"Got {len(chunks)}/{chunks_to_requeset} chunks to download")
         for chunk_id in chunks:
             if (chunk_id in CHUNK_THREADS):
                 continue

@@ -22,8 +22,9 @@ class WorkerContext():
             read_size = 1023**2 # upload in 1MiB chunks
             data = file.read(read_size)
             while (len(data) > 0):
-                uploaded += len(data)
                 yield data
+                uploaded += len(data)
+                self.pbar.update(len(data))
                 data = file.read(read_size)
 
                 # Update status to reflect update amount
@@ -42,7 +43,7 @@ class WorkerContext():
 def worker_thread(context: WorkerContext):
     context.pbar.clear()
     context.pbar.total = context.range_end - context.range_start
-    context.pbar.desc = "Downloading"
+    context.pbar.desc = f"Downloading {context.chunk_id}"
     response = requests.get(context.url, headers={
         "User-Agent": context.user_agent,
         "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
@@ -69,7 +70,7 @@ def worker_thread(context: WorkerContext):
     # It's done, upload it now
     with open(context.file_location, "rb") as file:
         context.pbar.reset()
-        context.pbar.desc = "Uploading"
+        context.pbar.desc = f"Uploading {context.chunk_id}"
         requests.put(context.upload_endpoint, headers={
             "authorization": f"Bearer {context.auth_token}"
         }, params={
