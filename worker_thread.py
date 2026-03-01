@@ -2,6 +2,8 @@ import requests
 from tqdm import tqdm
 import os
 
+import urllib.parse
+
 class WorkerContext():
     def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, pbar: tqdm):
         self.chunk_id = chunk_id
@@ -43,7 +45,7 @@ class WorkerContext():
 def worker_thread(context: WorkerContext):
     context.pbar.clear()
     context.pbar.total = context.range_end - context.range_start
-    context.pbar.desc = f"Downloading {context.chunk_id}"
+    context.pbar.desc = f"Downloading from {urllib.parse.unquote(os.path.basename(context.url))}"
     response = requests.get(context.url, headers={
         "User-Agent": context.user_agent,
         "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive

@@ -118,7 +118,7 @@ while True:
             if (chunk_id in CHUNK_THREADS):
                 continue
             chunk = chunks[chunk_id]
-            file_location = f"./chunks/{chunk_id}.bin"
+            file_location = f"./chunks/{chunk_id}_{worker_id}.bin"
             context = WorkerContext(chunk_id,
                                     chunk["url"],
                                     file_location,
@@ -128,7 +128,7 @@ while True:
                                     COORDINATOR_ROOT + "/status",
                                     auth_token,
                                     USER_AGENT,
-                                    tqdm()
+                                    tqdm(unit="B", unit_scale=True)
                                 )
             CHUNK_THREADS[chunk_id] = Thread(target=worker_thread, args=(context,))
             CHUNK_THREADS[chunk_id].start()
