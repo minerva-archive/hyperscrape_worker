@@ -7,6 +7,7 @@ import os
 
 from tqdm import tqdm
 
+from status_handler import StatusHandler
 from utils import test_download_speed
 from worker_thread import WorkerContext, worker_thread
 
@@ -49,8 +50,11 @@ if (config["general"]["max_chunk_count"] != 0):
 
 os.makedirs("./chunks", exist_ok=True)
 
+status_handler = StatusHandler(COORDINATOR_ROOT + "/status", config["general"]["status_interval"])
+
 CHUNK_THREADS: dict[str, Thread] = {}
 while True:
+    status_handler.clear_all()
     print("\nTrying to connect to coordinator")
     worker_id = None
     for CONNECT_RETRIES in range(3):
@@ -77,12 +81,14 @@ while True:
         print("Will try again in one minute...")
         time.sleep(60)
 
+    status_handler.set_auth_token(auth_token)
     print(f"Connected to coordinator with ID: {worker_id}")
     print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
     while True:
         for chunk_id in list(CHUNK_THREADS.keys()):
             chunk_thread = CHUNK_THREADS[chunk_id]
             if (not chunk_thread.is_alive()):
+                status_handler.remove_status(chunk_id) # Just to be sure!
                 del CHUNK_THREADS[chunk_id]
         
         if (len(CHUNK_THREADS) == CHUNK_COUNT):
@@ -127,7 +133,7 @@ while True:
                                     chunk["range"][0],
                                     chunk["range"][1],
                                     COORDINATOR_ROOT + "/upload",
-                                    COORDINATOR_ROOT + "/status",
+                                    status_handler,
                                     auth_token,
                                     USER_AGENT,
                                     config["general"]["status_interval"],

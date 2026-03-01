@@ -5,8 +5,10 @@ import os
 
 import urllib.parse
 
+from status_handler import StatusHandler
+
 class WorkerContext():
-    def __init__(self, chunk_id: str, file_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, status_interval: int, pbar: tqdm):
+    def __init__(self, chunk_id: str, file_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_handler: StatusHandler, auth_token: str, user_agent: str, status_interval: int, pbar: tqdm):
         self.chunk_id = chunk_id
         self.file_id = file_id
         self.url = url
@@ -14,7 +16,7 @@ class WorkerContext():
         self.range_start = range_start
         self.range_end = range_end
         self.upload_endpoint = upload_endpoint
-        self.status_endpoint = status_endpoint
+        self.status_handler = status_handler
         self.auth_token = auth_token
         self.user_agent = user_agent
         self.status_interval = status_interval
@@ -41,7 +43,6 @@ def worker_thread(context: WorkerContext):
         "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
     }, stream=True)
 
-    last_status_time = 0
     with open(context.file_location, 'wb') as file:
         downloaded = 0
         try:
@@ -49,16 +50,9 @@ def worker_thread(context: WorkerContext):
                 file.write(chunk)
                 context.pbar.update(len(chunk))
                 downloaded += len(chunk)
-                if (time.time() - last_status_time >= context.status_interval): # Send status only at an interval
-                    requests.put(context.status_endpoint, headers={
-                        "authorization": f"Bearer {context.auth_token}"
-                    }, json = {
-                        context.chunk_id: {
-                            "downloaded": downloaded,
-                            "uploaded": 0
-                        }
-                    })
+                context.status_handler.update_status(context.chunk_id, downloaded)
         except:
+            context.status_handler.remove_status(context.chunk_id)
             print(f"[ERR] Failed to download {context.url}")
             requests.put(context.status_endpoint, headers={
                     "authorization": f"Bearer {context.auth_token}"
@@ -70,13 +64,8 @@ def worker_thread(context: WorkerContext):
             os.remove(context.file_location)
             return
     
-    requests.put(context.status_endpoint, headers={
-            "authorization": f"Bearer {context.auth_token}"
-        }, json = {
-            context.chunk_id: {
-                "downloaded": downloaded
-            }
-    })
+    context.status_handler.wait_status_sent()
+    context.status_handler.remove_status(context.chunk_id)
     
     # It's done, upload it now
     try:

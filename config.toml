@@ -1,5 +1,5 @@
 [general]
-coordinator_url = "http://127.0.0.1:8081"
+coordinator_url = "http://test.hackerdude.tech:8081"
 retry_time = 10 # Seconds to wait between retries
 status_interval = 5 # Send status every five seconds (DO NOT CHANGE THIS)
 
