@@ -73,6 +73,7 @@ while True:
                 continue
             worker_id = response.json()["worker_id"]
             auth_token = response.json()["auth_token"]
+            break
         except Exception as e:
             print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
             time.sleep(RETRY_TIME)
