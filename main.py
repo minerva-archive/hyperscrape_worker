@@ -74,7 +74,8 @@ while True:
             time.sleep(RETRY_TIME)
     if (worker_id == None):
         print("COULD NOT CONNECT TO COORDINATOR!")
-        os._exit(1)
+        print("Will try again in one minute...")
+        time.sleep(60)
 
     print(f"Connected to coordinator with ID: {worker_id}")
     print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
