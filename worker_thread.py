@@ -56,9 +56,9 @@ def worker_thread(context: WorkerContext):
             context.pbar.update(len(chunk))
             downloaded += len(chunk)
             try:
-                requests.get(context.status_endpoint, headers={
+                requests.put(context.status_endpoint, headers={
                     "authorization": f"Bearer {context.auth_token}"
-                }, data = {
+                }, json = {
                     context.chunk_id: {
                         "downloaded": downloaded,
                         "uploaded": 0
