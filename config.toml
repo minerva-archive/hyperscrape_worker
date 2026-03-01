@@ -1,6 +1,7 @@
 [general]
 coordinator_url = "http://127.0.0.1:8081"
 retry_time = 3 # Seconds to wait between retries
+status_interval = 5 # Send status every five seconds (DO NOT CHANGE THIS)
 
 # URLs for speed testing
 myrient_speed_test_url = "https://myrient.erista.me/files/No-Intro/VM%20Labs%20-%20NUON%20%28Digital%29/Atari%202600%20Pac-Man%20%28Unknown%29%20%28Unl%29.zip"

@@ -1,11 +1,12 @@
 import requests
 from tqdm import tqdm
+import time
 import os
 
 import urllib.parse
 
 class WorkerContext():
-    def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, pbar: tqdm):
+    def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, status_interval: int, pbar: tqdm):
         self.chunk_id = chunk_id
         self.url = url
         self.file_location = file_location
@@ -15,6 +16,7 @@ class WorkerContext():
         self.status_endpoint = status_endpoint
         self.auth_token = auth_token
         self.user_agent = user_agent
+        self.status_interval = status_interval
         self.pbar = pbar
 
     def read_file_with_progress(self):
@@ -29,19 +31,6 @@ class WorkerContext():
                 self.pbar.update(len(data))
                 data = file.read(read_size)
 
-                # Update status to reflect update amount
-                try:
-                    requests.get(self.status_endpoint, headers={
-                        "authorization": f"Bearer {self.auth_token}"
-                    }, data = {
-                        self.chunk_id: {
-                            "downloaded": downloaded,
-                            "uploaded": uploaded
-                        }
-                    })
-                except Exception as e:
-                    print(f"[WARN]: Could not update status: {e}")
-
 def worker_thread(context: WorkerContext):
     context.pbar.clear()
     context.pbar.total = context.range_end - context.range_start
@@ -51,13 +40,14 @@ def worker_thread(context: WorkerContext):
         "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
     }, stream=True)
 
+    last_status_time = 0
     with open(context.file_location, 'wb') as file:
         downloaded = 0
         for chunk in response.iter_content(8192): # 8192KB size seems good
             file.write(chunk)
             context.pbar.update(len(chunk))
             downloaded += len(chunk)
-            try:
+            if (time.time() - last_status_time >= context.status_interval): # Send status only at an interval
                 requests.put(context.status_endpoint, headers={
                     "authorization": f"Bearer {context.auth_token}"
                 }, json = {
@@ -66,8 +56,14 @@ def worker_thread(context: WorkerContext):
                         "uploaded": 0
                     }
                 })
-            except Exception as e:
-                print(f"[WARN]: Could not update status: {e}")
+    
+    requests.put(context.status_endpoint, headers={
+            "authorization": f"Bearer {context.auth_token}"
+        }, json = {
+            context.chunk_id: {
+                "downloaded": downloaded
+            }
+    })
     
     # It's done, upload it now
     with open(context.file_location, "rb") as file:

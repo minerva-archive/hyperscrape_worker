@@ -129,6 +129,7 @@ while True:
                                     COORDINATOR_ROOT + "/status",
                                     auth_token,
                                     USER_AGENT,
+                                    config["general"]["status_interval"],
                                     tqdm(unit="B", unit_scale=True)
                                 )
             CHUNK_THREADS[chunk_id] = Thread(target=worker_thread, args=(context,))
