@@ -46,4 +46,6 @@ class StatusHandler():
 
     def wait_status_sent(self):
         time_until_next = self.status_interval - (time.time() - self.last_status_time)
+        if (time_until_next < 0):
+            time_until_next = 0.1
         time.sleep(time_until_next)
