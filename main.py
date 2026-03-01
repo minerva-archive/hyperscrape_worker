@@ -16,7 +16,7 @@ with open("./config.toml", 'rb') as file:
     config = tomllib.load(file)
 COORDINATOR_ROOT = config["general"]["coordinator_url"]
 RETRY_TIME = config["general"]["retry_time"]
-VERSION = 1
+VERSION = 2
 USER_AGENT = f"HyperscrapeWorker/v{VERSION} (Created by Hackerdude for Minerva)"
 
 print("""
@@ -41,7 +41,7 @@ except:
     print("Testing raw download speed")
     params["download_speed"] = test_download_speed(config["general"]["speed_test_url"])
     print("Testing Myrient download speed")
-    params["myrient_download_speed"] = test_download_speed(config["general"]["myrient_speed_test_url"])*2 # @FIXME: *2?
+    params["myrient_download_speed"] = test_download_speed(config["general"]["myrient_speed_test_url"])
     save_params()
 
 CHUNK_COUNT = int(params["download_speed"]//params["myrient_download_speed"]) # Request enough chunks to saturate
@@ -61,10 +61,7 @@ while True:
         try:
             response = requests.post(f"{COORDINATOR_ROOT}/workers", json={
                 "version": VERSION,
-                "max_upload": 100, # HARDCODED FOR NOW!
-                "max_download": params["download_speed"],
-                "max_per_file_speed": params["myrient_download_speed"],
-                "threads": os.cpu_count()
+                "max_concurrent": CHUNK_COUNT
             })
             if (response.status_code != 200):
                 print(f"Error: Unable to connect to coordinator ({response.status_code}), retrying in {RETRY_TIME}s...")
@@ -126,11 +123,9 @@ while True:
             if (chunk_id in CHUNK_THREADS):
                 continue
             chunk = chunks[chunk_id]
-            file_location = f"./chunks/{chunk_id}_{worker_id}.bin"
             context = WorkerContext(chunk_id,
                                     chunk["file_id"],
                                     chunk["url"],
-                                    file_location,
                                     chunk["range"][0],
                                     chunk["range"][1],
                                     COORDINATOR_ROOT + "/upload",

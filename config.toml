@@ -1,5 +1,5 @@
 [general]
-coordinator_url = "http://test.hackerdude.tech:8081"
+coordinator_url = "http://127.0.0.1:8081"
 retry_time = 10 # Seconds to wait between retries
 status_interval = 5 # Send status every five seconds (DO NOT CHANGE THIS)
 
@@ -8,4 +8,4 @@ myrient_speed_test_url = "https://myrient.erista.me/files/No-Intro/VM%20Labs%20-
 speed_test_url = "http://ipv4.download.thinkbroadband.com/5MB.zip"
 
 # Limit the number of chunks (0 means unlimited)
-max_chunk_count = 0
+max_chunk_count = 8
