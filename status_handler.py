@@ -21,6 +21,9 @@ class StatusHandler():
     def set_auth_token(self, auth_token: str):
         self.auth_token = auth_token
 
+    def nullify_status(self, chunk_id: str):
+        self.statuses[chunk_id] = None
+
     def main_thread(self):
         while True:
             try:
@@ -30,6 +33,9 @@ class StatusHandler():
                             "authorization": f"Bearer {self.auth_token}"
                 }, json=self.statuses)
                 self.last_status_time = time.time()
+                for status in list(self.statuses.keys()):
+                    if (self.statuses[status] == None):
+                        del self.statuses[status]
                 time.sleep(self.status_interval)
             except Exception as e:
                 print("[WARN] Could not send status:")

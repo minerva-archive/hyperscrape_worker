@@ -1,6 +1,5 @@
 import requests
 from tqdm import tqdm
-import time
 import os
 
 import urllib.parse
@@ -23,7 +22,6 @@ class WorkerContext():
         self.pbar = pbar
 
     def read_file_with_progress(self):
-        downloaded = self.range_end - self.range_start
         uploaded = 0
         with open(self.file_location, 'rb') as file:
             read_size = 1023**2 # upload in 1MiB chunks
@@ -38,31 +36,34 @@ def worker_thread(context: WorkerContext):
     context.pbar.clear()
     context.pbar.total = context.range_end - context.range_start
     context.pbar.desc = f"Downloading from {urllib.parse.unquote(os.path.basename(context.url))}"
-    response = requests.get(context.url, headers={
-        "User-Agent": context.user_agent,
-        "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
-    }, stream=True)
+    try:
+        response = requests.get(context.url, headers={
+            "User-Agent": context.user_agent,
+            "Range": f"bytes={context.range_start}-{context.range_end-1}" # We do -1 because it seems range is inclusive
+        }, stream=True)
 
-    with open(context.file_location, 'wb') as file:
-        downloaded = 0
-        try:
-            for chunk in response.iter_content(8192): # 8192KB size seems good
-                file.write(chunk)
-                context.pbar.update(len(chunk))
-                downloaded += len(chunk)
-                context.status_handler.update_status(context.chunk_id, downloaded)
-        except:
-            context.status_handler.remove_status(context.chunk_id)
-            print(f"[ERR] Failed to download {context.url}")
-            requests.put(context.status_endpoint, headers={
-                    "authorization": f"Bearer {context.auth_token}"
-                }, json = {
-                    context.chunk_id: None
-            })
-            context.pbar.close()
-            # Delete the file
-            os.remove(context.file_location)
-            return
+        with open(context.file_location, 'wb') as file:
+            downloaded = 0
+            try:
+                for chunk in response.iter_content(8192): # 8192KB size seems good
+                    file.write(chunk)
+                    context.pbar.update(len(chunk))
+                    downloaded += len(chunk)
+                    context.status_handler.update_status(context.chunk_id, downloaded)
+            except Exception as e:
+                context.pbar.close()
+                context.status_handler.nullify_status(context.chunk_id)
+                print(f"[ERR] Failed to download {context.url}")
+                print(e)
+                # Delete the file
+                os.remove(context.file_location)
+                return
+    except Exception as e:
+        context.pbar.close()
+        context.status_handler.nullify_status(context.chunk_id)
+        print(f"[ERR]: Could not download {urllib.parse.unquote(os.path.basename(context.url))}")
+        print(e)
+        return
     
     context.status_handler.wait_status_sent()
     context.status_handler.remove_status(context.chunk_id)
@@ -78,13 +79,10 @@ def worker_thread(context: WorkerContext):
                 "chunk_id": context.chunk_id,
                 "file_id": context.file_id
             }, data=context.read_file_with_progress())
-    except:
+    except Exception as e:
         print(f"[ERR] Failed to download {context.url}")
-        requests.put(context.status_endpoint, headers={
-                "authorization": f"Bearer {context.auth_token}"
-            }, json = {
-                context.chunk_id: None
-        })
+        print(e)
+        context.status_handler.nullify_status(context.chunk_id)
     context.pbar.close()
     # Delete the file
     os.remove(context.file_location)
