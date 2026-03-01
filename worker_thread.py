@@ -6,8 +6,9 @@ import os
 import urllib.parse
 
 class WorkerContext():
-    def __init__(self, chunk_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, status_interval: int, pbar: tqdm):
+    def __init__(self, chunk_id: str, file_id: str, url: str, file_location: str, range_start: int, range_end: int, upload_endpoint: str, status_endpoint: str, auth_token: str, user_agent: str, status_interval: int, pbar: tqdm):
         self.chunk_id = chunk_id
+        self.file_id = file_id
         self.url = url
         self.file_location = file_location
         self.range_start = range_start
@@ -43,19 +44,31 @@ def worker_thread(context: WorkerContext):
     last_status_time = 0
     with open(context.file_location, 'wb') as file:
         downloaded = 0
-        for chunk in response.iter_content(8192): # 8192KB size seems good
-            file.write(chunk)
-            context.pbar.update(len(chunk))
-            downloaded += len(chunk)
-            if (time.time() - last_status_time >= context.status_interval): # Send status only at an interval
-                requests.put(context.status_endpoint, headers={
+        try:
+            for chunk in response.iter_content(8192): # 8192KB size seems good
+                file.write(chunk)
+                context.pbar.update(len(chunk))
+                downloaded += len(chunk)
+                if (time.time() - last_status_time >= context.status_interval): # Send status only at an interval
+                    requests.put(context.status_endpoint, headers={
+                        "authorization": f"Bearer {context.auth_token}"
+                    }, json = {
+                        context.chunk_id: {
+                            "downloaded": downloaded,
+                            "uploaded": 0
+                        }
+                    })
+        except:
+            print(f"[ERR] Failed to download {context.url}")
+            requests.put(context.status_endpoint, headers={
                     "authorization": f"Bearer {context.auth_token}"
                 }, json = {
-                    context.chunk_id: {
-                        "downloaded": downloaded,
-                        "uploaded": 0
-                    }
-                })
+                    context.chunk_id: None
+            })
+            context.pbar.close()
+            # Delete the file
+            os.remove(context.file_location)
+            return
     
     requests.put(context.status_endpoint, headers={
             "authorization": f"Bearer {context.auth_token}"
@@ -66,14 +79,23 @@ def worker_thread(context: WorkerContext):
     })
     
     # It's done, upload it now
-    with open(context.file_location, "rb") as file:
-        context.pbar.reset()
-        context.pbar.desc = f"Uploading {context.chunk_id}"
-        requests.put(context.upload_endpoint, headers={
-            "authorization": f"Bearer {context.auth_token}"
-        }, params={
-            "chunk_id": context.chunk_id
-        }, data=context.read_file_with_progress())
+    try:
+        with open(context.file_location, "rb") as file:
+            context.pbar.reset()
+            context.pbar.desc = f"Uploading {context.chunk_id}"
+            requests.put(context.upload_endpoint, headers={
+                "authorization": f"Bearer {context.auth_token}"
+            }, params={
+                "chunk_id": context.chunk_id,
+                "file_id": context.file_id
+            }, data=context.read_file_with_progress())
+    except:
+        print(f"[ERR] Failed to download {context.url}")
+        requests.put(context.status_endpoint, headers={
+                "authorization": f"Bearer {context.auth_token}"
+            }, json = {
+                context.chunk_id: None
+        })
     context.pbar.close()
     # Delete the file
     os.remove(context.file_location)

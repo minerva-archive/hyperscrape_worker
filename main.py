@@ -121,6 +121,7 @@ while True:
             chunk = chunks[chunk_id]
             file_location = f"./chunks/{chunk_id}_{worker_id}.bin"
             context = WorkerContext(chunk_id,
+                                    chunk["file_id"],
                                     chunk["url"],
                                     file_location,
                                     chunk["range"][0],
