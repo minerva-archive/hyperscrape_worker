@@ -1,15 +1,43 @@
-from threading import Thread
+import socket
+from threading import Lock, Thread
 import tomllib
 import requests
+from websockets.sync.client import connect
 import json
 import time
 import os
 
 from tqdm import tqdm
 
-from status_handler import StatusHandler
 from utils import test_download_speed
-from worker_thread import WorkerContext, worker_thread
+from worker_thread import WorkerThread
+from ws_message import WSMessage, WSMessageType
+
+
+###
+# DNS caching
+# Inspired by: https://stackoverflow.com/a/22614367
+###
+dns_cache: dict[str, str] = {}
+from urllib3.util import connection
+_super_create_connection = connection.create_connection
+def cached_create_connection(
+    address: tuple[str, int],
+    timeout: connection._TYPE_TIMEOUT = connection._DEFAULT_TIMEOUT,
+    source_address: tuple[str, int] | None = None,
+    socket_options: connection._TYPE_SOCKET_OPTIONS | None = None,
+) -> socket.socket:
+    host, port = address
+    hostname = ""
+    if (not host in dns_cache):
+        addr_info = socket.getaddrinfo(host, port)
+        dns_cache[host] = addr_info[0][-1][0]
+    hostname = dns_cache[host]
+    return _super_create_connection((hostname, port), timeout, source_address, socket_options)
+connection.create_connection = cached_create_connection
+###
+###
+###
 
 config = None
 with open("./config.toml", 'rb') as file:
@@ -50,90 +78,90 @@ if (config["general"]["max_chunk_count"] != 0):
 
 os.makedirs("./chunks", exist_ok=True)
 
-status_handler = StatusHandler(COORDINATOR_ROOT + "/status", config["general"]["status_interval"])
+CHUNK_THREADS: dict[str, WorkerThread] = {}
 
-CHUNK_THREADS: dict[str, Thread] = {}
-while True:
-    status_handler.clear_all()
-    print("\nTrying to connect to coordinator")
-    worker_id = None
-    for CONNECT_RETRIES in range(3):
-        try:
-            response = requests.post(f"{COORDINATOR_ROOT}/workers", json={
-                "version": VERSION,
-                "max_concurrent": CHUNK_COUNT
-            })
-            if (response.status_code != 200):
-                print(f"Error: Unable to connect to coordinator ({response.status_code}), retrying in {RETRY_TIME}s...")
-                print(f"{response.text}")
-                time.sleep(RETRY_TIME)
-                continue
-            worker_id = response.json()["worker_id"]
-            auth_token = response.json()["auth_token"]
-            break
-        except Exception as e:
-            print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
-            time.sleep(RETRY_TIME)
-    if (worker_id == None):
-        print("COULD NOT CONNECT TO COORDINATOR!")
-        print("Will try again in one minute...")
-        time.sleep(60)
-
-    status_handler.set_auth_token(auth_token)
-    print(f"Connected to coordinator with ID: {worker_id}")
-    print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
+def main():
     while True:
-        for chunk_id in list(CHUNK_THREADS.keys()):
-            chunk_thread = CHUNK_THREADS[chunk_id]
-            if (not chunk_thread.is_alive()):
-                status_handler.remove_status(chunk_id) # Just to be sure!
-                del CHUNK_THREADS[chunk_id]
-        
-        if (len(CHUNK_THREADS) == CHUNK_COUNT):
-            time.sleep(1) # Don't explode the CPU
-            continue
+        for id in list(CHUNK_THREADS.keys()):
+            CHUNK_THREADS[id].stop()
+            del CHUNK_THREADS[id]
+        print("\nTrying to connect to coordinator")
+        with connect(f"{COORDINATOR_ROOT}") as websocket:
+            websocket_lock = Lock()
 
-        # We have space to get more chunk threads
-        chunks_to_requeset = CHUNK_COUNT - len(CHUNK_THREADS)
-        try:
-            response = requests.get(f"{COORDINATOR_ROOT}/chunks", params={
-                "n": chunks_to_requeset
-            }, headers={
-                "authorization": f"Bearer {auth_token}"
-            })
-            if (response.status_code != 200):
-                print(f"Error retrieving chunks ({response.status_code}):")
-                print(response.text)
+            worker_id = None
+            try:
+                with websocket_lock:
+                    websocket.send(WSMessage(WSMessageType.REGISTER, {
+                        "version": VERSION,
+                        "max_concurrent": CHUNK_COUNT
+                    }).encode())
+                    response: WSMessage = WSMessage.decode(websocket.recv())
+                    if (response.get_type() != WSMessageType.REGISTER_RESPONSE):
+                        print(f"Error: Unable to connect to coordinator ({response.get_payload()}), retrying in {RETRY_TIME}s...")
+                        time.sleep(RETRY_TIME)
+                        continue
+                worker_id = response.get_payload()["worker_id"]
+            except Exception as e:
+                print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
                 time.sleep(RETRY_TIME)
-                break
-            chunks = response.json()
-            if (len(chunks) == 0):
-                if (len(CHUNK_THREADS) == 0):
-                    print("Waiting for new chunks to download...")
-                time.sleep(RETRY_TIME)
-                continue
-        except Exception as e:
-            print(f"Error retrieving chunks ({e}):")
-            time.sleep(RETRY_TIME)
-            break
+            if (worker_id == None):
+                print("COULD NOT CONNECT TO COORDINATOR!")
+                print("Will try again in one minute...")
+                time.sleep(60)
 
-        if (len(chunks) > 0):
-            print(f"Got {len(chunks)}/{chunks_to_requeset} chunks to download")
-        for chunk_id in chunks:
-            if (chunk_id in CHUNK_THREADS):
-                continue
-            chunk = chunks[chunk_id]
-            context = WorkerContext(chunk_id,
-                                    chunk["file_id"],
-                                    chunk["url"],
-                                    chunk["range"][0],
-                                    chunk["range"][1],
-                                    COORDINATOR_ROOT + "/upload",
-                                    status_handler,
-                                    auth_token,
-                                    USER_AGENT,
-                                    config["general"]["status_interval"],
-                                    tqdm(unit="B", unit_scale=True)
-                                )
-            CHUNK_THREADS[chunk_id] = Thread(target=worker_thread, args=(context,))
-            CHUNK_THREADS[chunk_id].start()
+            print(f"Connected to coordinator with ID: {worker_id}")
+            print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
+            while True:
+                for chunk_id in list(CHUNK_THREADS.keys()):
+                    chunk_thread = CHUNK_THREADS[chunk_id]
+                    if (not chunk_thread.is_alive()):
+                        del CHUNK_THREADS[chunk_id]
+                
+                if (len(CHUNK_THREADS) == CHUNK_COUNT):
+                    time.sleep(1) # Don't explode the CPU
+                    continue
+
+                # We have space to get more chunk threads
+                chunks_to_request = CHUNK_COUNT - len(CHUNK_THREADS)
+                chunks = {}
+                with websocket_lock:
+                    try:
+                        websocket.send(WSMessage(WSMessageType.GET_CHUNKS, {"count": chunks_to_request}).encode())
+                        response: WSMessage = WSMessage.decode(websocket.recv())
+                        if (response.get_type() != WSMessageType.CHUNK_RESPONSE):
+                            print(f"Error retrieving chunks ({response.get_payload()}):")
+                            time.sleep(RETRY_TIME)
+                            break
+                        chunks = response.get_payload()
+                        if (len(chunks) == 0):
+                            if (len(CHUNK_THREADS) == 0):
+                                print("Waiting for new chunks to download...")
+                            time.sleep(RETRY_TIME)
+                            continue
+                    except Exception as e:
+                        print(f"Error retrieving chunks ({e}):")
+                        time.sleep(RETRY_TIME)
+                        break
+
+                if (len(chunks) > 0):
+                    print(f"Got {len(chunks)}/{chunks_to_request} chunks to download")
+                for chunk_id in chunks:
+                    if (chunk_id in CHUNK_THREADS):
+                        continue
+                    chunk = chunks[chunk_id]
+                    CHUNK_THREADS[chunk_id] = WorkerThread(
+                                            chunk_id,
+                                            chunk["file_id"],
+                                            chunk["url"],
+                                            chunk["range"][0],
+                                            chunk["range"][1],
+                                            websocket,
+                                            websocket_lock,
+                                            USER_AGENT
+                                        )
+                    CHUNK_THREADS[chunk_id].start()
+
+
+if __name__ == "__main__":
+    main()
