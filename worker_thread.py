@@ -42,7 +42,7 @@ class WorkerContext():
                 self.status_handler.nullify_status(self.chunk_id)
                 print(f"[ERR] Failed to download {self.url}")
                 print(e)
-                return
+                raise e
         except Exception as e:
             self.pbar.close()
             self.status_handler.nullify_status(self.chunk_id)
