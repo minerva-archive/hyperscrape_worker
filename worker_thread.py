@@ -9,7 +9,7 @@ import urllib.parse
 from ws_message import WSMessage, WSMessageType
 
 class WorkerThread():
-    def __init__(self, chunk_id: str, file_id: str, url: str, range_start: int, range_end: int, websocket: ClientConnection, websocket_lock: Lock, user_agent: str):
+    def __init__(self, chunk_id: str, file_id: str, url: str, range_start: int, range_end: int, websocket: ClientConnection, websocket_lock: Lock, user_agent: str, subchunk_size: int):
         self.chunk_id = chunk_id
         self.file_id = file_id
         self.url = url
@@ -22,6 +22,7 @@ class WorkerThread():
         self.pbar.desc = f"Streaming from {urllib.parse.unquote(os.path.basename(self.url))}"
         self.should_run = True
         self.thread = Thread(target=self.worker_thread)
+        self.subchunk_size = subchunk_size
 
     def is_alive(self):
         return self.thread.is_alive()
@@ -39,9 +40,11 @@ class WorkerThread():
                 "Range": f"bytes={self.range_start}-{self.range_end-1}" # We do -1 because it seems range is inclusive
             }, stream=True)
 
-            for chunk in response.iter_content(8192): # read and upload 8KB at a time
+            for chunk in response.iter_content(self.subchunk_size): # read and upload 8KB at a time
                 if (not self.should_run):
                     response.close()
+                    self.pbar.close() # Cleanup pbar properly
+                    del self.pbar
                     return # Terminate
                 with self.websocket_lock:
                     self.websocket.send(WSMessage(WSMessageType.UPLOAD_SUBCHUNK, {
@@ -59,10 +62,11 @@ class WorkerThread():
                             "chunk_id": self.chunk_id
                         }).encode())
                         ws_response: WSMessage = WSMessage.decode(self.websocket.recv()) # Just wait for the next message
+                    self.pbar.close() # Cleanup pbar properly
+                    del self.pbar
                     return
                 self.pbar.update(len(chunk))
         except Exception as e:
-            self.pbar.close()
             print(f"[ERR]: Could not download {urllib.parse.unquote(os.path.basename(self.url))}")
             print(e)
             with self.websocket_lock:
@@ -70,4 +74,5 @@ class WorkerThread():
                     "chunk_id": self.chunk_id
                 }).encode())
                 ws_response: WSMessage = WSMessage.decode(self.websocket.recv()) # Just wait for the next message
-        self.pbar.close()
+        self.pbar.close() # Cleanup pbar properly
+        del self.pbar

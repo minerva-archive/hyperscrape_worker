@@ -158,7 +158,8 @@ def main():
                                             chunk["range"][1],
                                             websocket,
                                             websocket_lock,
-                                            USER_AGENT
+                                            USER_AGENT,
+                                            config["general"]["subchunk_size"]
                                         )
                     CHUNK_THREADS[chunk_id].start()
 
