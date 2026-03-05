@@ -49,7 +49,7 @@ with open("./config.toml", 'rb') as file:
     config = tomllib.load(file)
 COORDINATOR_ROOT = config["general"]["coordinator_url"]
 RETRY_TIME = config["general"]["retry_time"]
-VERSION = 2
+VERSION = 3
 USER_AGENT = f"HyperscrapeWorker/v{VERSION} (Created by Hackerdude for Minerva)"
 
 print("""
@@ -58,17 +58,6 @@ print("""
 = Created By Hackerdude =
 =========================
 """)
-
-print("Would you like to connect to your Discord account and appear on the leaderboard?")
-discord_token = None
-answer = input("[Y/n] ")
-if (answer.lower() != "n"):
-    print("Please open the following URL in your browser")
-    print("https://discord.com/oauth2/authorize?client_id=1478862142793977998&response_type=code&redirect_uri=https%3A%2F%2Ffirehose.minerva-archive.org%2Fcode&scope=identify")
-    print("Once you have authorized the app, enter the returned code here:")
-    discord_token = input("Enter code: ")
-else:
-    print("[WARN] Running without Discord integration! YOU WILL NOT APPEAR ON THE LEADERBOARD :(")
 
 params = {}
 
@@ -81,6 +70,33 @@ try:
     with open("./params.json", 'r') as file:
         params = json.loads(file.read())
 except:
+    pass
+
+if ("discord_token" in params):
+    r = requests.get("https://discord.com/api/users/@me", headers={
+        "Authorization": f"Bearer {params['discord_token']}"
+    })
+    if (r.status_code != 200):
+        print("[ERR] Discord token expired or invalid!")
+        print(r.text)
+        print("Asking for token again...")
+        del params['discord_token']
+
+if (not "discord_token" in params):
+    print("Would you like to connect to your Discord account and appear on the leaderboard?")
+    discord_token = None
+    answer = input("[Y/n] ")
+    if (answer.lower() != "n"):
+        print("Please open the following URL in your browser")
+        print("https://discord.com/oauth2/authorize?client_id=1478862142793977998&response_type=code&redirect_uri=https%3A%2F%2Ffirehose.minerva-archive.org%2Fcode&scope=identify")
+        print("Once you have authorized the app, enter the returned code here:")
+        discord_token = input("Enter code: ")
+        params["discord_token"] = discord_token
+        save_params()
+    else:
+        print("[WARN] Running without Discord integration! YOU WILL NOT APPEAR ON THE LEADERBOARD :(")
+
+if (not "download_speed" in params):
     print("Could not read params! Regenerating...")
     print("Testing raw download speed")
     params["download_speed"] = test_download_speed(config["general"]["speed_test_url"])
@@ -111,7 +127,7 @@ def main():
                     websocket.send(WSMessage(WSMessageType.REGISTER, {
                         "version": VERSION,
                         "max_concurrent": CHUNK_COUNT,
-                        "discord_token": discord_token
+                        "access_token": params.get("discord_token", None)
                     }).encode())
                     response: WSMessage = WSMessage.decode(websocket.recv())
                     if (response.get_type() != WSMessageType.REGISTER_RESPONSE):
