@@ -22,6 +22,7 @@ if (sys.platform == "linux"):
 # Inspired by: https://stackoverflow.com/a/22614367
 ###
 dns_cache: dict[str, str] = {}
+dns_cache_times: dict[str, int] = {}
 from urllib3.util import connection
 _super_create_connection = connection.create_connection
 def cached_create_connection(
@@ -32,9 +33,10 @@ def cached_create_connection(
 ) -> socket.socket:
     host, port = address
     hostname = ""
-    if (not host in dns_cache):
+    if ((not host in dns_cache) or time.time() - dns_cache_times[host] > 60): # Refresh DNS cache every 60 seconds
         addr_info = socket.getaddrinfo(host, port)
         dns_cache[host] = addr_info[0][-1][0]
+        dns_cache_times[host] = time.time()
     hostname = dns_cache[host]
     return _super_create_connection((hostname, port), timeout, source_address, socket_options)
 connection.create_connection = cached_create_connection
