@@ -1,5 +1,5 @@
 [general]
-coordinator_url = "ws://firehose.minerva-archive.org/"
+coordinator_url = "wss://firehose.minerva-archive.org/worker"
 retry_time = 10 # Seconds to wait between retries
 
 # URLs for speed testing
