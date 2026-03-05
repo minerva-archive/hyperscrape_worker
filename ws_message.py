@@ -29,6 +29,6 @@ class WSMessage():
         encoded += pickled
         return encoded
     
-    def decode(encoded: bytes) -> WSMessage:
+    def decode(encoded: bytes):
         return WSMessage(encoded[0], pickle.loads(encoded[1:]))
         
