@@ -1,4 +1,5 @@
 import socket
+import sys
 from threading import Lock, Thread
 import tomllib
 import requests
@@ -13,6 +14,8 @@ from utils import test_download_speed
 from worker_thread import WorkerThread
 from ws_message import WSMessage, WSMessageType
 
+if (sys.platform == "linux"):
+    os.system("ulimit -n 16384") # Update ulimit lol
 
 ###
 # DNS caching
