@@ -6,6 +6,8 @@ from websockets import ClientConnection
 
 import urllib.parse
 
+import websockets
+
 from ws_message import WSMessage, WSMessageType
 
 class WorkerThread():
@@ -23,6 +25,10 @@ class WorkerThread():
         self.should_run = True
         self.thread = Thread(target=self.worker_thread)
         self.subchunk_size = subchunk_size
+        self.websocket_failed = False
+
+    def get_websocket_failed(self):
+        return self.websocket_failed
 
     def is_alive(self):
         return self.thread.is_alive()
@@ -66,13 +72,24 @@ class WorkerThread():
                     del self.pbar
                     return
                 self.pbar.update(len(chunk))
+        except websockets.exceptions.WebSocketException as e:
+            self.websocket_failed = True
+            self.should_run = False
+            print(f"[ERR]: Failed to connect to the server!")
+            print(e)
         except Exception as e:
             print(f"[ERR]: Could not download {urllib.parse.unquote(os.path.basename(self.url))}")
             print(e)
-            with self.websocket_lock:
-                self.websocket.send(WSMessage(WSMessageType.DETACH_CHUNK, {
-                    "chunk_id": self.chunk_id
-                }).encode())
-                ws_response: WSMessage = WSMessage.decode(self.websocket.recv()) # Just wait for the next message
+            try:
+                with self.websocket_lock:
+                    self.websocket.send(WSMessage(WSMessageType.DETACH_CHUNK, {
+                        "chunk_id": self.chunk_id
+                    }).encode())
+                    ws_response: WSMessage = WSMessage.decode(self.websocket.recv()) # Just wait for the next message
+            except:
+                self.websocket_failed = True
+                self.should_run = False
+                print(f"[ERR]: Failed to connect to the server!")
+                print(e)
         self.pbar.close() # Cleanup pbar properly
         del self.pbar

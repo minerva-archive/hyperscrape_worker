@@ -54,6 +54,17 @@ print("""
 =========================
 """)
 
+print("Would you like to connect to your Discord account and appear on the leaderboard?")
+discord_token = None
+answer = input("[Y/n] ")
+if (answer.lower() != "n"):
+    print("Please open the following URL in your browser")
+    print("https://discord.com/oauth2/authorize?client_id=1478862142793977998&response_type=code&redirect_uri=https%3A%2F%2Ffirehose.minerva-archive.org%2Fcode&scope=identify")
+    print("Once you have authorized the app, enter the returned code here:")
+    discord_token = input("Enter code: ")
+else:
+    print("[WARN] Running without Discord integration! YOU WILL NOT APPEAR ON THE LEADERBOARD :(")
+
 params = {}
 
 def save_params():
@@ -94,7 +105,8 @@ def main():
                 with websocket_lock:
                     websocket.send(WSMessage(WSMessageType.REGISTER, {
                         "version": VERSION,
-                        "max_concurrent": CHUNK_COUNT
+                        "max_concurrent": CHUNK_COUNT,
+                        "discord_token": discord_token
                     }).encode())
                     response: WSMessage = WSMessage.decode(websocket.recv())
                     if (response.get_type() != WSMessageType.REGISTER_RESPONSE):
@@ -115,6 +127,13 @@ def main():
             while True:
                 for chunk_id in list(CHUNK_THREADS.keys()):
                     chunk_thread = CHUNK_THREADS[chunk_id]
+                    if (chunk_thread.get_websocket_failed()):
+                        for id in list(CHUNK_THREADS.keys()):
+                            CHUNK_THREADS[id].stop()
+                            del CHUNK_THREADS[id]
+                        print(f"[ERR] Websocket failure - Trying to reconnect in {RETRY_TIME}s")
+                        time.sleep(RETRY_TIME)
+                        break # Reconnect
                     if (not chunk_thread.is_alive()):
                         del CHUNK_THREADS[chunk_id]
                 
@@ -162,7 +181,6 @@ def main():
                                             config["general"]["subchunk_size"]
                                         )
                     CHUNK_THREADS[chunk_id].start()
-
 
 if __name__ == "__main__":
     main()

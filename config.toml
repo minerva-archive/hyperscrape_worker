@@ -7,6 +7,6 @@ myrient_speed_test_url = "https://myrient.erista.me/files/No-Intro/VM%20Labs%20-
 speed_test_url = "http://ipv4.download.thinkbroadband.com/5MB.zip"
 
 # Limit the number of chunks (0 means unlimited)
-max_chunk_count = 1000
+max_chunk_count = 500
 
 subchunk_size = 16384 # Size of subchunks in bytes
