@@ -85,7 +85,7 @@ except:
 
 CHUNK_COUNT = int(params["download_speed"]//params["myrient_download_speed"]) # Request enough chunks to saturate
 if (config["general"]["max_chunk_count"] != 0):
-    CHUNK_COUNT = config["general"]["max_chunk_count"]
+    CHUNK_COUNT = min(CHUNK_COUNT, config["general"]["max_chunk_count"])
 
 os.makedirs("./chunks", exist_ok=True)
 
