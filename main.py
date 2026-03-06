@@ -84,7 +84,7 @@ if ("discord_token" in params):
 
 if (not "discord_token" in params):
     print("Would you like to connect to your Discord account and appear on the leaderboard?")
-    discord_token = None
+    discord_token = ""
     answer = input("[Y/n] ")
     if (answer.lower() != "n"):
         print("Please open the following URL in your browser")
