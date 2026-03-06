@@ -11,12 +11,9 @@ class BetterStruct():
         self._pos += len(string) + 4
 
     def get_string(self) -> str:
-        try:
-            length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
-            self._pos += 4 + length
-            return self._buffer[self._pos-length:self._pos].decode('utf-8')
-        except:
-            print("UHOH")
+        length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
+        self._pos += 4 + length
+        return self._buffer[self._pos-length:self._pos].decode('utf-8')
     
     def add_bytes(self, data: bytes):
         self._buffer += len(data).to_bytes(4, 'little', signed=False)
