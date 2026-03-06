@@ -49,7 +49,7 @@ with open("./config.toml", 'rb') as file:
     config = tomllib.load(file)
 COORDINATOR_ROOT = config["general"]["coordinator_url"]
 RETRY_TIME = config["general"]["retry_time"]
-VERSION = 3
+VERSION = 4
 USER_AGENT = f"HyperscrapeWorker/v{VERSION} (Created by Hackerdude for Minerva)"
 
 print("""
