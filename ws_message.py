@@ -5,14 +5,18 @@ class BetterStruct():
             self._buffer = bytes()
         self._pos = 0
     def add_string(self, string: str):
-        self._buffer += len(string).to_bytes(4, 'little', signed=False)
-        self._buffer += string.encode('utf-8')
+        encoded_string = string.encode('utf-8')
+        self._buffer += len(encoded_string).to_bytes(4, 'little', signed=False)
+        self._buffer += encoded_string
         self._pos += len(string) + 4
 
     def get_string(self) -> str:
-        length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
-        self._pos += 4 + length
-        return self._buffer[self._pos-length:self._pos].decode('utf-8')
+        try:
+            length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
+            self._pos += 4 + length
+            return self._buffer[self._pos-length:self._pos].decode('utf-8')
+        except:
+            print("UHOH")
     
     def add_bytes(self, data: bytes):
         self._buffer += len(data).to_bytes(4, 'little', signed=False)
