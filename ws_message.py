@@ -1,5 +1,3 @@
-import pickle
-
 class BetterStruct():
     def __init__(self, buffer=None):
         self._buffer = buffer
@@ -110,15 +108,23 @@ class WSMessage():
         if (type == WSMessageType.CHUNK_RESPONSE):
             payload_length = struct.get_integer()
             for i in range(payload_length):
-                payload[struct.get_string()] = {
-                    "file_id": struct.get_string(),
-                    "url": struct.get_string(),
+                chunk_id = struct.get_string()
+                file_id = struct.get_string()
+                url = struct.get_string()
+                start = struct.get_integer()
+                end = struct.get_integer()
+                payload[chunk_id] = {
+                    "file_id": file_id,
+                    "url": url,
                     "range": [
-                        struct.get_integer(),
-                        struct.get_integer()
+                        start,
+                        end
                     ]
                 }
         if (type == WSMessageType.ERROR_RESPONSE or type == WSMessageType.OK_RESPONSE):
             payload_length = struct.get_integer()
             for i in range(payload_length):
-                payload[struct.get_string()] = struct.get_string()
+                key = struct.get_string()
+                value = struct.get_string()
+                payload[key] = value
+        return WSMessage(type, payload)
