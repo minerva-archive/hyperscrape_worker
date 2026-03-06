@@ -76,7 +76,10 @@ if ("discord_token" in params):
     r = requests.get("https://discord.com/api/users/@me", headers={
         "Authorization": f"Bearer {params['discord_token']}"
     })
-    if (r.status_code != 200):
+    if (r.status_code != 200 or
+        (not "id" in r.json()) or
+        (not "global_name" in r.json()) or
+        (not "avatar" in r.json())):
         print("[ERR] Discord token expired or invalid!")
         print(r.text)
         print("Asking for token again...")
