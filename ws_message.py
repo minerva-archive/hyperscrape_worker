@@ -7,28 +7,45 @@ class BetterStruct():
     def add_string(self, string: str):
         self._buffer += len(string).to_bytes(4, 'little', signed=False)
         self._buffer += string.encode('utf-8')
-        self._pos = len(self._buffer)-1
+        self._pos += len(string) + 4
+
     def get_string(self) -> str:
         length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
         self._pos += 4 + length
         return self._buffer[self._pos-length:self._pos].decode('utf-8')
+    
     def add_bytes(self, data: bytes):
         self._buffer += len(data).to_bytes(4, 'little', signed=False)
         self._buffer += data
-        self._pos = len(self._buffer)-1
+        self._pos += len(data) + 4
+
     def get_bytes(self) -> bytes:
         length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
         self._pos += 4 + length
         return self._buffer[self._pos-length:self._pos]
+    
     def add_integer(self, integer: str):
         self._buffer += integer.to_bytes(4, 'little', signed=False)
+        self._pos += 4
+
     def get_integer(self) -> int:
         self._pos += 4
         return int.from_bytes(self._buffer[self._pos-4:self._pos], 'little', signed=False)
+    
+    def add_big_integer(self, integer: str):
+        self._buffer += integer.to_bytes(8, 'little', signed=False)
+        self._pos += 8
+
+    def get_big_integer(self) -> int:
+        self._pos += 8
+        return int.from_bytes(self._buffer[self._pos-8:self._pos], 'little', signed=False)
+    
     def get_buffer(self) -> bytes:
         return self._buffer
+    
     def add_byte(self, integer: int):
         self._buffer += integer.to_bytes(1, 'little', signed=False)
+
     def get_byte(self) -> int:
         self._pos += 1
         return self._buffer[self._pos-1]
@@ -78,8 +95,8 @@ class WSMessage():
                 encoded.add_string(chunk_id)
                 encoded.add_string(self._payload[chunk_id]["file_id"])
                 encoded.add_string(self._payload[chunk_id]["url"])
-                encoded.add_integer(self._payload[chunk_id]["range"][0])
-                encoded.add_integer(self._payload[chunk_id]["range"][1])
+                encoded.add_big_integer(self._payload[chunk_id]["range"][0])
+                encoded.add_big_integer(self._payload[chunk_id]["range"][1])
         if (self._type == WSMessageType.ERROR_RESPONSE or self._type == WSMessageType.OK_RESPONSE):
             encoded.add_integer(len(self._payload))
             for key in self._payload:
@@ -111,8 +128,8 @@ class WSMessage():
                 chunk_id = struct.get_string()
                 file_id = struct.get_string()
                 url = struct.get_string()
-                start = struct.get_integer()
-                end = struct.get_integer()
+                start = struct.get_big_integer()
+                end = struct.get_big_integer()
                 payload[chunk_id] = {
                     "file_id": file_id,
                     "url": url,
