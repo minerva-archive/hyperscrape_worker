@@ -8,7 +8,7 @@ class BetterStruct():
         encoded_string = string.encode('utf-8')
         self._buffer += len(encoded_string).to_bytes(4, 'little', signed=False)
         self._buffer += encoded_string
-        self._pos += len(string) + 4
+        self._pos += len(encoded_string) + 4
 
     def get_string(self) -> str:
         length = int.from_bytes(self._buffer[self._pos:self._pos+4], 'little', signed=False)
