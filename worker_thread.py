@@ -47,6 +47,14 @@ class WorkerThread():
             }, stream=True)
             if (response.status_code != 206): # We expect 206 here because we requested a range, full content would break file on upload
                 raise Exception(f"Received non 206 code ({response.status_code})")
+            
+            # Validate content size
+            expected_size = self.range_end - self.range_start
+            content_length = response.headers.get('Content-Length')
+            if content_length:
+                content_length = int(content_length)
+                if content_length != expected_size:
+                    raise Exception(f"Incorrect Content-Length, expected {expected_size} bytes, got {content_length} bytes")
 
             for chunk in response.iter_content(self.subchunk_size): # read and upload 8KB at a time
                 if (not self.should_run):
