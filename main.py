@@ -121,90 +121,94 @@ def main():
             CHUNK_THREADS[id].stop()
             del CHUNK_THREADS[id]
         print("\nTrying to connect to coordinator")
-        with connect(f"{COORDINATOR_ROOT}") as websocket:
-            websocket_lock = Lock()
+        try:
+            with connect(f"{COORDINATOR_ROOT}") as websocket:
+                websocket_lock = Lock()
 
-            worker_id = None
-            try:
-                with websocket_lock:
-                    websocket.send(WSMessage(WSMessageType.REGISTER, {
-                        "version": VERSION,
-                        "max_concurrent": CHUNK_COUNT,
-                        "access_token": params.get("discord_token", None)
-                    }).encode())
-                    response: WSMessage = WSMessage.decode(websocket.recv())
-                    if (response.get_type() != WSMessageType.REGISTER_RESPONSE):
-                        print(f"Error: Unable to connect to coordinator ({response.get_payload()}), retrying in {RETRY_TIME}s...")
-                        time.sleep(RETRY_TIME)
-                        continue
-                worker_id = response.get_payload()["worker_id"]
-            except Exception as e:
-                print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
-                time.sleep(RETRY_TIME)
-            if (worker_id == None):
-                print("COULD NOT CONNECT TO COORDINATOR!")
-                print("Will try again in one minute...")
-                time.sleep(60)
-
-            print(f"Connected to coordinator with ID: {worker_id}")
-            print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
-            while True:
-                for chunk_id in list(CHUNK_THREADS.keys()):
-                    chunk_thread = CHUNK_THREADS[chunk_id]
-                    if (chunk_thread.get_websocket_failed()):
-                        for id in list(CHUNK_THREADS.keys()):
-                            CHUNK_THREADS[id].stop()
-                            del CHUNK_THREADS[id]
-                        print(f"[ERR] Websocket failure - Trying to reconnect in {RETRY_TIME}s")
-                        time.sleep(RETRY_TIME)
-                        break # Reconnect
-                    if (not chunk_thread.is_alive()):
-                        del CHUNK_THREADS[chunk_id]
-                
-                if (len(CHUNK_THREADS) == CHUNK_COUNT):
-                    time.sleep(1) # Don't explode the CPU
-                    continue
-
-                # We have space to get more chunk threads
-                chunks_to_request = CHUNK_COUNT - len(CHUNK_THREADS)
-                chunks = {}
-                with websocket_lock:
-                    try:
-                        websocket.send(WSMessage(WSMessageType.GET_CHUNKS, {"count": chunks_to_request}).encode())
+                worker_id = None
+                try:
+                    with websocket_lock:
+                        websocket.send(WSMessage(WSMessageType.REGISTER, {
+                            "version": VERSION,
+                            "max_concurrent": CHUNK_COUNT,
+                            "access_token": params.get("discord_token", None)
+                        }).encode())
                         response: WSMessage = WSMessage.decode(websocket.recv())
-                        if (response.get_type() != WSMessageType.CHUNK_RESPONSE):
-                            print(f"Error retrieving chunks ({response.get_payload()}):")
-                            time.sleep(RETRY_TIME)
-                            break
-                        chunks = response.get_payload()
-                        if (len(chunks) == 0):
-                            if (len(CHUNK_THREADS) == 0):
-                                print("Waiting for new chunks to download...")
+                        if (response.get_type() != WSMessageType.REGISTER_RESPONSE):
+                            print(f"Error: Unable to connect to coordinator ({response.get_payload()}), retrying in {RETRY_TIME}s...")
                             time.sleep(RETRY_TIME)
                             continue
-                    except Exception as e:
-                        print(f"Error retrieving chunks ({e}):")
-                        time.sleep(RETRY_TIME)
-                        break
+                    worker_id = response.get_payload()["worker_id"]
+                except Exception as e:
+                    print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
+                    time.sleep(RETRY_TIME)
+                if (worker_id == None):
+                    print("COULD NOT CONNECT TO COORDINATOR!")
+                    print("Will try again in one minute...")
+                    time.sleep(60)
 
-                if (len(chunks) > 0):
-                    print(f"Got {len(chunks)}/{chunks_to_request} chunks to download")
-                for chunk_id in chunks:
-                    if (chunk_id in CHUNK_THREADS):
+                print(f"Connected to coordinator with ID: {worker_id}")
+                print(f"This worker can request up to {CHUNK_COUNT} chunks at once - This can be overriden in the configuration file")
+                while True:
+                    for chunk_id in list(CHUNK_THREADS.keys()):
+                        chunk_thread = CHUNK_THREADS[chunk_id]
+                        if (chunk_thread.get_websocket_failed()):
+                            for id in list(CHUNK_THREADS.keys()):
+                                CHUNK_THREADS[id].stop()
+                                del CHUNK_THREADS[id]
+                            print(f"[ERR] Websocket failure - Trying to reconnect in {RETRY_TIME}s")
+                            time.sleep(RETRY_TIME)
+                            break # Reconnect
+                        if (not chunk_thread.is_alive()):
+                            del CHUNK_THREADS[chunk_id]
+                    
+                    if (len(CHUNK_THREADS) == CHUNK_COUNT):
+                        time.sleep(1) # Don't explode the CPU
                         continue
-                    chunk = chunks[chunk_id]
-                    CHUNK_THREADS[chunk_id] = WorkerThread(
-                                            chunk_id,
-                                            chunk["file_id"],
-                                            chunk["url"],
-                                            chunk["range"][0],
-                                            chunk["range"][1],
-                                            websocket,
-                                            websocket_lock,
-                                            USER_AGENT,
-                                            config["general"]["subchunk_size"]
-                                        )
-                    CHUNK_THREADS[chunk_id].start()
+
+                    # We have space to get more chunk threads
+                    chunks_to_request = CHUNK_COUNT - len(CHUNK_THREADS)
+                    chunks = {}
+                    with websocket_lock:
+                        try:
+                            websocket.send(WSMessage(WSMessageType.GET_CHUNKS, {"count": chunks_to_request}).encode())
+                            response: WSMessage = WSMessage.decode(websocket.recv())
+                            if (response.get_type() != WSMessageType.CHUNK_RESPONSE):
+                                print(f"Error retrieving chunks ({response.get_payload()}):")
+                                time.sleep(RETRY_TIME)
+                                break
+                            chunks = response.get_payload()
+                            if (len(chunks) == 0):
+                                if (len(CHUNK_THREADS) == 0):
+                                    print("Waiting for new chunks to download...")
+                                time.sleep(RETRY_TIME)
+                                continue
+                        except Exception as e:
+                            print(f"Error retrieving chunks ({e}):")
+                            time.sleep(RETRY_TIME)
+                            break
+
+                    if (len(chunks) > 0):
+                        print(f"Got {len(chunks)}/{chunks_to_request} chunks to download")
+                    for chunk_id in chunks:
+                        if (chunk_id in CHUNK_THREADS):
+                            continue
+                        chunk = chunks[chunk_id]
+                        CHUNK_THREADS[chunk_id] = WorkerThread(
+                                                chunk_id,
+                                                chunk["file_id"],
+                                                chunk["url"],
+                                                chunk["range"][0],
+                                                chunk["range"][1],
+                                                websocket,
+                                                websocket_lock,
+                                                USER_AGENT,
+                                                config["general"]["subchunk_size"]
+                                            )
+                        CHUNK_THREADS[chunk_id].start()
+        except Exception as e:
+            print(f"Error: Unable to connect to coordinator ({e}), retrying in {RETRY_TIME}s...")
+            time.sleep(RETRY_TIME)
 
 if __name__ == "__main__":
     main()
