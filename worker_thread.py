@@ -45,8 +45,8 @@ class WorkerThread():
                 "User-Agent": self.user_agent,
                 "Range": f"bytes={self.range_start}-{self.range_end-1}" # We do -1 because it seems range is inclusive
             }, stream=True)
-            if (response != 200):
-                raise Exception("Non-200 response received")
+            if (response.status_code < 200 or response.status_code >= 400):
+                raise Exception(f"Non-OK response received: {response.status_code}")
 
             for chunk in response.iter_content(self.subchunk_size): # read and upload 8KB at a time
                 if (not self.should_run):
