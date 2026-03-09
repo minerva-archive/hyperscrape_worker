@@ -195,7 +195,7 @@ def main():
                     chunk = chunks[chunk_id]
                     CHUNK_THREADS[chunk_id] = WorkerThread(
                                             chunk_id,
-                                            chunk["file_id"],
+                                            chunk["file_size"],
                                             chunk["url"],
                                             chunk["range"][0],
                                             chunk["range"][1],

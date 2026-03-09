@@ -1,4 +1,8 @@
 class BetterStruct():
+    """!
+    @brief This is a lazy implementation of a struct-like format for WSMessage objects
+    """
+
     def __init__(self, buffer=None):
         self._buffer = buffer
         if (self._buffer == None):
@@ -56,13 +60,20 @@ class WSMessageType():
     UPLOAD_SUBCHUNK=1
     GET_CHUNKS=2
     DETACH_CHUNK=3
+    CORRECT_FILE_SIZE=4
 
     REGISTER_RESPONSE = 128
     CHUNK_RESPONSE=129
     ERROR_RESPONSE=130
     OK_RESPONSE=131
 
+
+
 class WSMessage():
+    """!
+    @brief The WSMessage object represents a message over the websocket to/from a worker
+    """
+
     def __init__(self, type: int, payload: dict):
         self._type = type
         self._payload = payload
@@ -74,6 +85,11 @@ class WSMessage():
         return self._payload
     
     def encode(self) -> bytes:
+        """!
+        @brief Convert this message into a bytes object to be sent over the websocket
+
+        @return (bytes): The message encoded as bytes
+        """
         encoded = BetterStruct()
         encoded.add_byte(self._type)
         if (self._type == WSMessageType.REGISTER):
@@ -82,10 +98,12 @@ class WSMessage():
             encoded.add_string(self._payload["access_token"])
         if (self._type == WSMessageType.UPLOAD_SUBCHUNK):
             encoded.add_string(self._payload["chunk_id"])
-            encoded.add_string(self._payload["file_id"])
             encoded.add_bytes(self._payload["payload"])
         if (self._type == WSMessageType.GET_CHUNKS):
             encoded.add_integer(self._payload["count"])
+        if (self._type == WSMessageType.CORRECT_FILE_SIZE):
+            encoded.add_string(self._payload["chunk_id"])
+            encoded.add_big_integer(self._payload["file_size"])
         if (self._type == WSMessageType.DETACH_CHUNK):
             encoded.add_string(self._payload["chunk_id"])
         if (self._type == WSMessageType.REGISTER_RESPONSE):
@@ -94,7 +112,7 @@ class WSMessage():
             encoded.add_integer(len(self._payload))
             for chunk_id in self._payload:
                 encoded.add_string(chunk_id)
-                encoded.add_string(self._payload[chunk_id]["file_id"])
+                encoded.add_big_integer(self._payload[chunk_id]["file_size"])
                 encoded.add_string(self._payload[chunk_id]["url"])
                 encoded.add_big_integer(self._payload[chunk_id]["range"][0])
                 encoded.add_big_integer(self._payload[chunk_id]["range"][1])
@@ -106,6 +124,13 @@ class WSMessage():
         return encoded.get_buffer()
     
     def decode(encoded: bytes):
+        """!
+        @brief Decode bytes from a message into a WSMessage object
+
+        @param encoded (bytes): The message as a bytes object
+
+        @return (WSMessage): The message object parse from the bytes
+        """
         struct = BetterStruct(encoded)
         type = struct.get_byte()
         payload = {}
@@ -115,10 +140,12 @@ class WSMessage():
             payload["access_token"] = struct.get_string()
         if (type == WSMessageType.UPLOAD_SUBCHUNK):
             payload["chunk_id"] = struct.get_string()
-            payload["file_id"] = struct.get_string()
             payload["payload"] = struct.get_bytes()
         if (type == WSMessageType.GET_CHUNKS):
             payload["count"] = struct.get_integer()
+        if (type == WSMessageType.CORRECT_FILE_SIZE):
+            payload["chunk_id"] = struct.get_string()
+            payload["file_size"] = struct.get_big_integer()
         if (type == WSMessageType.DETACH_CHUNK):
             payload["chunk_id"] = struct.get_string()
         if (type == WSMessageType.REGISTER_RESPONSE):
@@ -127,12 +154,12 @@ class WSMessage():
             payload_length = struct.get_integer()
             for i in range(payload_length):
                 chunk_id = struct.get_string()
-                file_id = struct.get_string()
+                file_size = struct.get_big_integer()
                 url = struct.get_string()
                 start = struct.get_big_integer()
                 end = struct.get_big_integer()
                 payload[chunk_id] = {
-                    "file_id": file_id,
+                    "file_size": file_size,
                     "url": url,
                     "range": [
                         start,

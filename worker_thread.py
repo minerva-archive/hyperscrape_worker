@@ -11,9 +11,9 @@ import websockets
 from ws_message import WSMessage, WSMessageType
 
 class WorkerThread():
-    def __init__(self, chunk_id: str, file_id: str, url: str, range_start: int, range_end: int, websocket: ClientConnection, websocket_lock: Lock, user_agent: str, subchunk_size: int):
+    def __init__(self, chunk_id: str, file_size: int, url: str, range_start: int, range_end: int, websocket: ClientConnection, websocket_lock: Lock, user_agent: str, subchunk_size: int):
         self.chunk_id = chunk_id
-        self.file_id = file_id
+        self.file_size = file_size
         self.url = url
         self.range_start = range_start
         self.range_end = range_end
@@ -41,10 +41,27 @@ class WorkerThread():
 
     def worker_thread(self):
         try:
+            response = requests.head(self.ur, headers={
+                "User-Agent": self.user_agent
+            }, allow_redirects=True)
+            if (response.status_code < 200 or response.status_code >= 400):
+                raise Exception(f"Non-OK response received: {response.status_code}")
+            file_size = response.headers.get("Content-Length", None)
+            if (file_size != None and file_size != self.file_size):
+                print(f"[WARN] File-size mismatch, got {file_size}, expected {self.file_size}")
+                self.websocket.send(WSMessage(WSMessageType.CORRECT_FILE_SIZE, {
+                    "chunk_id": self.chunk_id,
+                    "file_size": self.file_size
+                }))
+                ws_response: WSMessage = WSMessage.decode(self.websocket.recv()) # This is primarily just to flush the WS buffer
+                self.pbar.close()
+                del self.pbar
+                return # Quit
+
             response = requests.get(self.url, headers={
                 "User-Agent": self.user_agent,
                 "Range": f"bytes={self.range_start}-{self.range_end-1}" # We do -1 because it seems range is inclusive
-            }, stream=True)
+            }, allow_redirects=True, stream=True)
             if (response.status_code < 200 or response.status_code >= 400):
                 raise Exception(f"Non-OK response received: {response.status_code}")
 
@@ -57,7 +74,6 @@ class WorkerThread():
                 with self.websocket_lock:
                     self.websocket.send(WSMessage(WSMessageType.UPLOAD_SUBCHUNK, {
                         "chunk_id": self.chunk_id,
-                        "file_id": self.file_id,
                         "payload": chunk
                     }).encode())
                     ws_response: WSMessage = WSMessage.decode(self.websocket.recv())
